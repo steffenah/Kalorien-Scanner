@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1f7a3a" />
+  <title>Kalorien-Scanner</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Kalorien-Scanner</h1>
+    <button id="settingsBtn" class="icon-btn" title="Einstellungen">⚙️</button>
+  </header>
+
+  <main>
+    <section id="captureSection" class="card">
+      <p class="hint">Foto aufnehmen oder aus Galerie wählen. Tipp: Hand oder Münze daneben legen — die KI schätzt die Portion dann genauer.</p>
+
+      <div class="capture-row">
+        <label class="btn primary">
+          📷 Foto aufnehmen
+          <input type="file" accept="image/*" capture="environment" id="cameraInput" hidden />
+        </label>
+        <label class="btn">
+          🖼️ Aus Galerie
+          <input type="file" accept="image/*" id="galleryInput" hidden />
+        </label>
+      </div>
+
+      <div id="previewWrap" hidden>
+        <img id="preview" alt="Vorschau" />
+        <textarea id="hint" placeholder="Optional: Hinweis zur Speise (z. B. 'große Portion', 'mit Sahne')"></textarea>
+        <button id="analyzeBtn" class="btn primary full">🔍 Analysieren</button>
+      </div>
+    </section>
+
+    <section id="resultSection" class="card" hidden>
+      <h2 id="resultTitle">Ergebnis</h2>
+      <div id="loading" hidden>
+        <div class="spinner"></div>
+        <p>Analysiere Foto …</p>
+      </div>
+      <div id="result"></div>
+    </section>
+
+    <section id="historySection" class="card">
+      <h2>Heute</h2>
+      <div id="dailyTotal" class="total">0 kcal</div>
+      <ul id="history"></ul>
+      <button id="clearTodayBtn" class="btn small ghost">Heute zurücksetzen</button>
+    </section>
+  </main>
+
+  <dialog id="settingsDialog">
+    <form method="dialog">
+      <h2>Einstellungen</h2>
+      <label>
+        Anthropic API-Key
+        <input type="password" id="apiKeyInput" placeholder="sk-ant-…" autocomplete="off" />
+      </label>
+      <p class="hint small">
+        Wird nur lokal in deinem Browser gespeichert. Key bekommst du unter
+        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
+      </p>
+      <label>
+        Modell
+        <select id="modelSelect">
+          <option value="claude-haiku-4-5">Haiku 4.5 — schnell & günstig (~0,5 ct/Bild)</option>
+          <option value="claude-sonnet-4-6">Sonnet 4.6 — genauer (~2 ct/Bild)</option>
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="cancelSettings" class="btn ghost">Abbrechen</button>
+        <button type="submit" id="saveSettings" class="btn primary">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
