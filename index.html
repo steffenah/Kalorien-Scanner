@@ -17,6 +17,36 @@
   </header>
 
   <main>
+    <section id="balanceSection" class="card balance-card">
+      <h2>Tagesbilanz</h2>
+      <div class="balance-grid">
+        <div class="balance-item">
+          <div class="bl-label">Bedarf</div>
+          <div class="bl-value" id="bdNeed">–</div>
+        </div>
+        <div class="balance-item">
+          <div class="bl-label">Verbrannt</div>
+          <div class="bl-value" id="bdBurned">–</div>
+        </div>
+        <div class="balance-item">
+          <div class="bl-label">Gegessen</div>
+          <div class="bl-value" id="bdEaten">0</div>
+        </div>
+      </div>
+      <div class="balance-result">
+        <div class="bl-label">Saldo</div>
+        <div class="bl-value-big" id="bdSaldo">–</div>
+        <div class="bl-sub" id="bdSaldoHint"></div>
+      </div>
+      <div class="steps-row">
+        <label for="stepsInput">Schritte heute:</label>
+        <input type="number" id="stepsInput" min="0" placeholder="0" inputmode="numeric" />
+      </div>
+      <p class="hint small" id="profileMissing" hidden>
+        ⚠️ Körperdaten fehlen — <a href="#" id="openSettingsLink">in Einstellungen ergänzen</a>, damit Bedarf berechnet werden kann.
+      </p>
+    </section>
+
     <section id="captureSection" class="card">
       <p class="hint">Foto aufnehmen oder aus Galerie wählen. Tipp: Hand oder Münze daneben legen — die KI schätzt die Portion dann genauer.</p>
 
@@ -48,8 +78,7 @@
     </section>
 
     <section id="historySection" class="card">
-      <h2>Heute</h2>
-      <div id="dailyTotal" class="total">0 kcal</div>
+      <h2>Mahlzeiten heute</h2>
       <ul id="history"></ul>
       <button id="clearTodayBtn" class="btn small ghost">Heute zurücksetzen</button>
     </section>
@@ -58,21 +87,65 @@
   <dialog id="settingsDialog">
     <form method="dialog">
       <h2>Einstellungen</h2>
-      <label>
-        Anthropic API-Key
-        <input type="password" id="apiKeyInput" placeholder="sk-ant-…" autocomplete="off" />
-      </label>
-      <p class="hint small">
-        Wird nur lokal in deinem Browser gespeichert. Key bekommst du unter
-        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
-      </p>
-      <label>
-        Modell
-        <select id="modelSelect">
-          <option value="claude-haiku-4-5">Haiku 4.5 — schnell & günstig (~0,5 ct/Bild)</option>
-          <option value="claude-sonnet-4-6">Sonnet 4.6 — genauer (~2 ct/Bild)</option>
-        </select>
-      </label>
+
+      <fieldset>
+        <legend>API</legend>
+        <label>
+          Anthropic API-Key
+          <input type="password" id="apiKeyInput" placeholder="sk-ant-…" autocomplete="off" />
+        </label>
+        <p class="hint small">
+          Wird nur lokal im Browser gespeichert. Key bekommst du unter
+          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
+        </p>
+        <label>
+          Modell
+          <select id="modelSelect">
+            <option value="claude-haiku-4-5">Haiku 4.5 — schnell & günstig (~0,5 ct/Bild)</option>
+            <option value="claude-sonnet-4-6">Sonnet 4.6 — genauer (~2 ct/Bild)</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Körperdaten (für Grundumsatz)</legend>
+        <div class="row-2">
+          <label>
+            Geschlecht
+            <select id="sexInput">
+              <option value="m">männlich</option>
+              <option value="w">weiblich</option>
+            </select>
+          </label>
+          <label>
+            Alter (Jahre)
+            <input type="number" id="ageInput" min="10" max="120" inputmode="numeric" />
+          </label>
+        </div>
+        <div class="row-2">
+          <label>
+            Gewicht (kg)
+            <input type="number" id="weightInput" min="30" max="300" step="0.1" inputmode="decimal" />
+          </label>
+          <label>
+            Größe (cm)
+            <input type="number" id="heightInput" min="100" max="250" inputmode="numeric" />
+          </label>
+        </div>
+        <label>
+          Grundaktivität (ohne Schritte/Sport)
+          <select id="activityInput">
+            <option value="1.2">sitzend (Büro, wenig Bewegung)</option>
+            <option value="1.375" selected>leicht aktiv (Alltag, etwas Bewegung)</option>
+            <option value="1.55">mäßig aktiv (körperliche Arbeit)</option>
+            <option value="1.725">sehr aktiv (schwere körperliche Arbeit)</option>
+          </select>
+        </label>
+        <p class="hint small">
+          Grundumsatz wird per Mifflin-St-Jeor berechnet, dann mit Aktivitätsfaktor multipliziert. Schritte zählen on top (~0,04 kcal × Gewicht / 70 pro Schritt).
+        </p>
+      </fieldset>
+
       <div class="dialog-actions">
         <button type="button" id="cancelSettings" class="btn ghost">Abbrechen</button>
         <button type="submit" id="saveSettings" class="btn primary">Speichern</button>

@@ -1,57 +1,86 @@
-// ===== State =====
+// ===== Storage Keys =====
 const STORE_KEY = 'kalorien-config';
 const HISTORY_KEY = 'kalorien-history';
+const STEPS_KEY = 'kalorien-steps';
 
-let currentImage = null; // { dataUrl, base64, mediaType }
+let currentImage = null;
 
-// ===== Settings =====
+// ===== Config =====
 function loadConfig() {
-  try {
-    return JSON.parse(localStorage.getItem(STORE_KEY)) || {};
-  } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
+  catch { return {}; }
 }
-
-function saveConfig(cfg) {
-  localStorage.setItem(STORE_KEY, JSON.stringify(cfg));
-}
-
-function getApiKey() {
-  return loadConfig().apiKey || '';
-}
-
-function getModel() {
-  return loadConfig().model || 'claude-haiku-4-5';
-}
+function saveConfig(cfg) { localStorage.setItem(STORE_KEY, JSON.stringify(cfg)); }
+function getApiKey() { return loadConfig().apiKey || ''; }
+function getModel() { return loadConfig().model || 'claude-haiku-4-5'; }
 
 // ===== Settings Dialog =====
 const settingsDialog = document.getElementById('settingsDialog');
 const apiKeyInput = document.getElementById('apiKeyInput');
 const modelSelect = document.getElementById('modelSelect');
+const sexInput = document.getElementById('sexInput');
+const ageInput = document.getElementById('ageInput');
+const weightInput = document.getElementById('weightInput');
+const heightInput = document.getElementById('heightInput');
+const activityInput = document.getElementById('activityInput');
 
-document.getElementById('settingsBtn').addEventListener('click', () => {
+function openSettings() {
   const cfg = loadConfig();
   apiKeyInput.value = cfg.apiKey || '';
   modelSelect.value = cfg.model || 'claude-haiku-4-5';
+  sexInput.value = cfg.sex || 'm';
+  ageInput.value = cfg.age || '';
+  weightInput.value = cfg.weight || '';
+  heightInput.value = cfg.height || '';
+  activityInput.value = cfg.activity || '1.375';
   settingsDialog.showModal();
-});
+}
 
-document.getElementById('cancelSettings').addEventListener('click', () => {
-  settingsDialog.close();
+document.getElementById('settingsBtn').addEventListener('click', openSettings);
+document.getElementById('openSettingsLink').addEventListener('click', (e) => {
+  e.preventDefault();
+  openSettings();
 });
+document.getElementById('cancelSettings').addEventListener('click', () => settingsDialog.close());
 
 document.getElementById('saveSettings').addEventListener('click', (e) => {
   e.preventDefault();
-  saveConfig({ apiKey: apiKeyInput.value.trim(), model: modelSelect.value });
+  saveConfig({
+    apiKey: apiKeyInput.value.trim(),
+    model: modelSelect.value,
+    sex: sexInput.value,
+    age: Number(ageInput.value) || null,
+    weight: Number(weightInput.value) || null,
+    height: Number(heightInput.value) || null,
+    activity: Number(activityInput.value) || 1.375,
+  });
   settingsDialog.close();
+  renderBalance();
 });
 
-// Prompt for key on first visit
+// First-run: open settings if API key missing
 if (!getApiKey()) {
-  setTimeout(() => {
-    apiKeyInput.value = '';
-    modelSelect.value = 'claude-haiku-4-5';
-    settingsDialog.showModal();
-  }, 300);
+  setTimeout(openSettings, 300);
+}
+
+// ===== Calorie Math =====
+function calcBMR(cfg) {
+  // Mifflin-St-Jeor
+  if (!cfg.weight || !cfg.height || !cfg.age || !cfg.sex) return null;
+  const base = 10 * cfg.weight + 6.25 * cfg.height - 5 * cfg.age;
+  return cfg.sex === 'w' ? base - 161 : base + 5;
+}
+
+function calcDailyNeed(cfg) {
+  const bmr = calcBMR(cfg);
+  if (bmr == null) return null;
+  return bmr * (cfg.activity || 1.375);
+}
+
+function stepsToKcal(steps, weight) {
+  if (!steps) return 0;
+  const w = weight || 70;
+  return steps * 0.04 * (w / 70);
 }
 
 // ===== Image Capture =====
@@ -62,12 +91,9 @@ const preview = document.getElementById('preview');
 
 function handleFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
-
   const reader = new FileReader();
   reader.onload = async (e) => {
-    const dataUrl = e.target.result;
-    // Downscale to keep API cost & latency in check
-    const resized = await resizeImage(dataUrl, 1280);
+    const resized = await resizeImage(e.target.result, 1280);
     currentImage = {
       dataUrl: resized,
       base64: resized.split(',')[1],
@@ -114,7 +140,7 @@ analyzeBtn.addEventListener('click', async () => {
   const apiKey = getApiKey();
   if (!apiKey) {
     alert('Bitte zuerst API-Key in Einstellungen eintragen.');
-    settingsDialog.showModal();
+    openSettings();
     return;
   }
   if (!currentImage) return;
@@ -162,14 +188,7 @@ Keine Markdown-Code-Blöcke, kein erklärender Text außerhalb des JSON.`;
     messages: [{
       role: 'user',
       content: [
-        {
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: image.mediaType,
-            data: image.base64,
-          },
-        },
+        { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.base64 } },
         { type: 'text', text: userText },
       ],
     }],
@@ -200,39 +219,25 @@ Keine Markdown-Code-Blöcke, kein erklärender Text außerhalb des JSON.`;
   const textBlock = data.content?.find(b => b.type === 'text');
   if (!textBlock) throw new Error('Keine Antwort vom Modell erhalten.');
 
-  // Strip potential markdown code fences just in case
-  let json = textBlock.text.trim();
-  json = json.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
-
-  let parsed;
+  let json = textBlock.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
   try {
-    parsed = JSON.parse(json);
-  } catch (e) {
+    return JSON.parse(json);
+  } catch {
     throw new Error('Antwort konnte nicht als JSON gelesen werden:\n' + json.slice(0, 200));
   }
-  return parsed;
 }
 
 // ===== Render Result =====
 function renderResult(data) {
-  const html = `
+  result.innerHTML = `
     <div class="result-card">
       <div class="result-name">${escapeHtml(data.name || 'Unbekannt')}</div>
       <div class="result-portion">${escapeHtml(data.portion || '')}</div>
       <div class="kcal-big">${Math.round(data.kcal || 0)} kcal</div>
       <div class="macros">
-        <div class="macro">
-          <div class="macro-label">Eiweiß</div>
-          <div class="macro-value">${Math.round(data.protein_g || 0)} g</div>
-        </div>
-        <div class="macro">
-          <div class="macro-label">Kohlenh.</div>
-          <div class="macro-value">${Math.round(data.carbs_g || 0)} g</div>
-        </div>
-        <div class="macro">
-          <div class="macro-label">Fett</div>
-          <div class="macro-value">${Math.round(data.fat_g || 0)} g</div>
-        </div>
+        <div class="macro"><div class="macro-label">Eiweiß</div><div class="macro-value">${Math.round(data.protein_g || 0)} g</div></div>
+        <div class="macro"><div class="macro-label">Kohlenh.</div><div class="macro-value">${Math.round(data.carbs_g || 0)} g</div></div>
+        <div class="macro"><div class="macro-label">Fett</div><div class="macro-value">${Math.round(data.fat_g || 0)} g</div></div>
       </div>
       ${data.note ? `<div class="confidence">${escapeHtml(data.note)} (Sicherheit: ${escapeHtml(data.confidence || '–')})</div>` : ''}
       <div class="result-actions">
@@ -240,29 +245,20 @@ function renderResult(data) {
       </div>
     </div>
   `;
-  result.innerHTML = html;
-
-  document.getElementById('saveResultBtn').addEventListener('click', () => {
+  document.getElementById('saveResultBtn').addEventListener('click', (ev) => {
     addToHistory(data);
-    document.getElementById('saveResultBtn').textContent = '✓ Hinzugefügt';
-    document.getElementById('saveResultBtn').disabled = true;
+    ev.target.textContent = '✓ Hinzugefügt';
+    ev.target.disabled = true;
   });
 }
 
 // ===== History =====
 function loadHistory() {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-  } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+  catch { return []; }
 }
-
-function saveHistory(items) {
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
-}
-
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
+function saveHistory(items) { localStorage.setItem(HISTORY_KEY, JSON.stringify(items)); }
+function todayKey() { return new Date().toISOString().slice(0, 10); }
 
 function addToHistory(data) {
   const items = loadHistory();
@@ -277,15 +273,13 @@ function addToHistory(data) {
   });
   saveHistory(items);
   renderHistory();
+  renderBalance();
 }
 
 function renderHistory() {
   const today = todayKey();
   const items = loadHistory().filter(i => i.date === today);
   const list = document.getElementById('history');
-  const total = items.reduce((s, i) => s + (i.kcal || 0), 0);
-
-  document.getElementById('dailyTotal').textContent = `${total} kcal`;
 
   if (items.length === 0) {
     list.innerHTML = '<li style="color:#999;justify-content:center;">Noch nichts erfasst</li>';
@@ -305,6 +299,7 @@ function renderHistory() {
       const id = Number(btn.dataset.id);
       saveHistory(loadHistory().filter(i => i.id !== id));
       renderHistory();
+      renderBalance();
     });
   });
 }
@@ -314,18 +309,86 @@ document.getElementById('clearTodayBtn').addEventListener('click', () => {
   const today = todayKey();
   saveHistory(loadHistory().filter(i => i.date !== today));
   renderHistory();
+  renderBalance();
 });
 
+// ===== Steps =====
+const stepsInput = document.getElementById('stepsInput');
+
+function loadSteps() {
+  try { return JSON.parse(localStorage.getItem(STEPS_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveSteps(map) { localStorage.setItem(STEPS_KEY, JSON.stringify(map)); }
+
+function getTodaySteps() {
+  return Number(loadSteps()[todayKey()] || 0);
+}
+
+stepsInput.addEventListener('input', () => {
+  const map = loadSteps();
+  const v = Number(stepsInput.value) || 0;
+  map[todayKey()] = v;
+  saveSteps(map);
+  renderBalance();
+});
+
+// ===== Balance =====
+function renderBalance() {
+  const cfg = loadConfig();
+  const need = calcDailyNeed(cfg);
+  const steps = getTodaySteps();
+  const burnedFromSteps = Math.round(stepsToKcal(steps, cfg.weight));
+  const eaten = loadHistory()
+    .filter(i => i.date === todayKey())
+    .reduce((s, i) => s + (i.kcal || 0), 0);
+
+  const profileOk = need != null;
+  document.getElementById('profileMissing').hidden = profileOk;
+
+  document.getElementById('bdNeed').textContent = profileOk ? `${Math.round(need)} kcal` : '–';
+  document.getElementById('bdBurned').textContent = profileOk
+    ? `+${burnedFromSteps} kcal`
+    : (steps ? `+${burnedFromSteps} kcal` : '–');
+  document.getElementById('bdEaten').textContent = `${eaten} kcal`;
+
+  // Saldo: positiv = noch verfügbar, negativ = überzogen
+  const saldoEl = document.getElementById('bdSaldo');
+  const saldoHint = document.getElementById('bdSaldoHint');
+
+  if (!profileOk) {
+    saldoEl.textContent = '–';
+    saldoEl.className = 'bl-value-big';
+    saldoHint.textContent = 'Körperdaten in Einstellungen ergänzen';
+    return;
+  }
+
+  const totalAvailable = need + burnedFromSteps;
+  const remaining = Math.round(totalAvailable - eaten);
+
+  saldoEl.className = 'bl-value-big';
+  if (remaining < -100) saldoEl.classList.add('over');
+  else if (remaining < 100) saldoEl.classList.add('warn');
+
+  if (remaining >= 0) {
+    saldoEl.textContent = `${remaining} kcal frei`;
+    saldoHint.textContent = `Bedarf ${Math.round(need)} + ${burnedFromSteps} Schritte − ${eaten} gegessen`;
+  } else {
+    saldoEl.textContent = `${Math.abs(remaining)} kcal über`;
+    saldoHint.textContent = `Bedarf ${Math.round(need)} + ${burnedFromSteps} Schritte − ${eaten} gegessen`;
+  }
+}
+
+// Initial render
+stepsInput.value = getTodaySteps() || '';
 renderHistory();
+renderBalance();
 
 // ===== Utilities =====
 function escapeHtml(s) {
   return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // ===== Service Worker =====
