@@ -42,44 +42,78 @@
         <label for="stepsInput">Schritte heute:</label>
         <input type="number" id="stepsInput" min="0" placeholder="0" inputmode="numeric" />
       </div>
+      <div id="dayCharts" class="charts-row" hidden>
+        <div class="chart-block">
+          <div class="chart-title">Verteilung nach Mahlzeit</div>
+          <div id="mealDistChart"></div>
+        </div>
+        <div class="chart-block">
+          <div class="chart-title">Tages-Makros</div>
+          <div id="dayMacroChart"></div>
+        </div>
+      </div>
+      <div id="dayHealth" class="health-banner" hidden></div>
       <p class="hint small" id="profileMissing" hidden>
         ⚠️ Körperdaten fehlen — <a href="#" id="openSettingsLink">in Einstellungen ergänzen</a>, damit Bedarf berechnet werden kann.
       </p>
     </section>
 
-    <section id="captureSection" class="card">
-      <p class="hint">Foto aufnehmen oder aus Galerie wählen. Tipp: Hand oder Münze daneben legen — die KI schätzt die Portion dann genauer.</p>
-
-      <div class="capture-row">
-        <label class="btn primary">
-          📷 Foto aufnehmen
-          <input type="file" accept="image/*" capture="environment" id="cameraInput" hidden />
-        </label>
-        <label class="btn">
-          🖼️ Aus Galerie
-          <input type="file" accept="image/*" id="galleryInput" hidden />
-        </label>
+    <section class="card">
+      <h2>Neue Mahlzeit</h2>
+      <div class="meal-type-row">
+        <button class="meal-btn" data-meal="Frühstück">🥐 Frühstück</button>
+        <button class="meal-btn" data-meal="Zwischenmahlzeit (vormittag)">☕ Vorm.</button>
+        <button class="meal-btn" data-meal="Mittagessen">🍽 Mittag</button>
+        <button class="meal-btn" data-meal="Zwischenmahlzeit (nachmittag)">🍎 Nachm.</button>
+        <button class="meal-btn" data-meal="Abendessen">🍴 Abend</button>
+        <button class="meal-btn" data-meal="Spät / Nachspeise">🍫 Spät</button>
       </div>
+      <p class="hint small" id="mealHint">Mahlzeit oben wählen, dann Lebensmittel suchen oder Foto machen.</p>
 
-      <div id="previewWrap" hidden>
-        <img id="preview" alt="Vorschau" />
-        <textarea id="hint" placeholder="Optional: Hinweis zur Speise (z. B. 'große Portion', 'mit Sahne')"></textarea>
-        <button id="analyzeBtn" class="btn primary full">🔍 Analysieren</button>
-      </div>
-    </section>
+      <div id="entryWrap" hidden>
+        <div class="selected-meal" id="selectedMealLabel"></div>
 
-    <section id="resultSection" class="card" hidden>
-      <h2 id="resultTitle">Ergebnis</h2>
-      <div id="loading" hidden>
-        <div class="spinner"></div>
-        <p>Analysiere Foto …</p>
+        <div class="entry-tabs">
+          <button class="entry-tab active" data-tab="search">🔍 Suchen</button>
+          <button class="entry-tab" data-tab="photo">📷 Foto</button>
+        </div>
+
+        <div id="searchTab" class="entry-panel">
+          <input type="text" id="foodSearch" placeholder="z. B. Toast, Apfel, Salami …" autocomplete="off" />
+          <div id="searchResults" class="search-results"></div>
+        </div>
+
+        <div id="photoTab" class="entry-panel" hidden>
+          <div class="capture-row">
+            <label class="btn primary">
+              📷 Foto aufnehmen
+              <input type="file" accept="image/*" capture="environment" id="cameraInput" hidden />
+            </label>
+            <label class="btn">
+              🖼️ Galerie
+              <input type="file" accept="image/*" id="galleryInput" hidden />
+            </label>
+          </div>
+          <div id="previewWrap" hidden>
+            <img id="preview" alt="Vorschau" />
+            <textarea id="photoHint" placeholder="Optional: Hinweis zur Speise"></textarea>
+            <button id="analyzeBtn" class="btn primary full">🔍 Analysieren</button>
+          </div>
+        </div>
+
+        <div id="resultSection" hidden>
+          <div id="loading" hidden>
+            <div class="spinner"></div>
+            <p>Analysiere …</p>
+          </div>
+          <div id="result"></div>
+        </div>
       </div>
-      <div id="result"></div>
     </section>
 
     <section id="historySection" class="card">
-      <h2>Mahlzeiten heute</h2>
-      <ul id="history"></ul>
+      <h2>Heute gegessen</h2>
+      <div id="mealsGrouped"></div>
       <button id="clearTodayBtn" class="btn small ghost">Heute zurücksetzen</button>
     </section>
   </main>
@@ -95,14 +129,14 @@
           <input type="password" id="apiKeyInput" placeholder="sk-ant-…" autocomplete="off" />
         </label>
         <p class="hint small">
-          Wird nur lokal im Browser gespeichert. Key bekommst du unter
-          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
+          Wird nur lokal im Browser gespeichert.
+          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Key holen</a>
         </p>
         <label>
           Modell
           <select id="modelSelect">
-            <option value="claude-haiku-4-5">Haiku 4.5 — schnell & günstig (~0,5 ct/Bild)</option>
-            <option value="claude-sonnet-4-6">Sonnet 4.6 — genauer (~2 ct/Bild)</option>
+            <option value="claude-haiku-4-5">Haiku 4.5 — schnell & günstig</option>
+            <option value="claude-sonnet-4-6">Sonnet 4.6 — genauer</option>
           </select>
         </label>
       </fieldset>
@@ -135,15 +169,12 @@
         <label>
           Grundaktivität (ohne Schritte/Sport)
           <select id="activityInput">
-            <option value="1.2">sitzend (Büro, wenig Bewegung)</option>
-            <option value="1.375" selected>leicht aktiv (Alltag, etwas Bewegung)</option>
-            <option value="1.55">mäßig aktiv (körperliche Arbeit)</option>
-            <option value="1.725">sehr aktiv (schwere körperliche Arbeit)</option>
+            <option value="1.2">sitzend</option>
+            <option value="1.375" selected>leicht aktiv</option>
+            <option value="1.55">mäßig aktiv</option>
+            <option value="1.725">sehr aktiv</option>
           </select>
         </label>
-        <p class="hint small">
-          Grundumsatz wird per Mifflin-St-Jeor berechnet, dann mit Aktivitätsfaktor multipliziert. Schritte zählen on top (~0,04 kcal × Gewicht / 70 pro Schritt).
-        </p>
       </fieldset>
 
       <div class="dialog-actions">
@@ -153,6 +184,7 @@
     </form>
   </dialog>
 
+  <script src="foods.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
