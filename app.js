@@ -3,6 +3,8 @@ const STORE_KEY = 'kalorien-config';
 const HISTORY_KEY = 'kalorien-history';
 const STEPS_KEY = 'kalorien-steps';
 const CUSTOM_FOODS_KEY = 'kalorien-custom-foods';
+const FREQ_KEY = 'kalorien-freq';
+const LAST_QTY_KEY = 'kalorien-last-qty';
 
 const MEAL_ORDER = [
   'Frühstück',
@@ -47,6 +49,30 @@ function loadCustomFoods() {
 }
 function saveCustomFoods(arr) { localStorage.setItem(CUSTOM_FOODS_KEY, JSON.stringify(arr)); }
 function allFoods() { return [...FOODS, ...loadCustomFoods()]; }
+
+// ===== Frequencies & last-used quantities =====
+function loadFreq() {
+  try { return JSON.parse(localStorage.getItem(FREQ_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveFreq(map) { localStorage.setItem(FREQ_KEY, JSON.stringify(map)); }
+function bumpFreq(name) {
+  const map = loadFreq();
+  map[name] = (map[name] || 0) + 1;
+  saveFreq(map);
+}
+
+function loadLastQty() {
+  try { return JSON.parse(localStorage.getItem(LAST_QTY_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveLastQty(map) { localStorage.setItem(LAST_QTY_KEY, JSON.stringify(map)); }
+function setLastQty(name, qty) {
+  const map = loadLastQty();
+  map[name] = qty;
+  saveLastQty(map);
+}
+function getLastQty(name) { return loadLastQty()[name] || 1; }
 
 // ===== Settings Dialog =====
 const settingsDialog = document.getElementById('settingsDialog');
@@ -99,17 +125,31 @@ const entryWrap = document.getElementById('entryWrap');
 const mealHint = document.getElementById('mealHint');
 const selectedMealLabel = document.getElementById('selectedMealLabel');
 
-document.querySelectorAll('.meal-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    currentMeal = btn.dataset.meal;
-    document.querySelectorAll('.meal-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedMealLabel.innerHTML = `<span class="meal-dot" style="background:${MEAL_COLORS[currentMeal]}"></span> ${escapeHtml(currentMeal)}`;
-    entryWrap.hidden = false;
-    mealHint.hidden = true;
-    resetEntryUi();
+function selectMeal(mealName) {
+  currentMeal = mealName;
+  document.querySelectorAll('.meal-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.meal === mealName);
   });
+  selectedMealLabel.innerHTML = `<span class="meal-dot" style="background:${MEAL_COLORS[mealName]}"></span> ${escapeHtml(mealName)}`;
+  entryWrap.hidden = false;
+  mealHint.hidden = true;
+  resetEntryUi();
+}
+
+document.querySelectorAll('.meal-btn').forEach(btn => {
+  btn.addEventListener('click', () => selectMeal(btn.dataset.meal));
 });
+
+// Smart default: pre-select meal based on time of day
+function suggestMealForNow() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 10) return 'Frühstück';
+  if (h >= 10 && h < 12) return 'Zwischenmahlzeit (vormittag)';
+  if (h >= 12 && h < 15) return 'Mittagessen';
+  if (h >= 15 && h < 17) return 'Zwischenmahlzeit (nachmittag)';
+  if (h >= 17 && h < 21) return 'Abendessen';
+  return 'Spät / Nachspeise';
+}
 
 function resetEntryUi() {
   document.getElementById('foodSearch').value = '';
@@ -303,16 +343,19 @@ function renderSearchResults() {
   if (results.length === 0) {
     html += `<div class="no-result">Keine Treffer in der Datenbank.</div>`;
   } else {
-    html += results.map(f => `
+    html += results.map(f => {
+      const lastQty = getLastQty(f.name);
+      return `
       <div class="food-item" data-name="${escapeAttr(f.name)}">
         <div class="food-item-main">
           <div class="food-name">${escapeHtml(f.name)}</div>
           <div class="food-meta">${f.kcal} kcal · ${escapeHtml(f.einheit)} · ${healthDot(f.health)}</div>
         </div>
-        <input type="number" class="qty" min="0.25" step="0.25" value="1" inputmode="decimal" />
+        <input type="number" class="qty" min="0.25" step="0.25" value="${lastQty}" inputmode="decimal" />
         <button class="add-btn btn primary small">+</button>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
   html += `
     <button id="askAiBtn" class="btn small ghost full-width">
@@ -345,6 +388,8 @@ function addFoodToMeal(food, qty) {
     fat_g: round1(food.f * qty),
     health: food.health,
   }, currentMeal);
+  bumpFreq(food.name);
+  setLastQty(food.name, qty);
   flashAdded(food.name);
 }
 
@@ -854,15 +899,213 @@ function escapeAttr(s) { return escapeHtml(s); }
 function renderAll() {
   renderHistory();
   renderBalance();
+  renderQuickAccess();
+  renderTrend();
+}
+
+// ===== Quick Access (most-used foods) =====
+function renderQuickAccess() {
+  const freq = loadFreq();
+  const top = Object.entries(freq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([name]) => allFoods().find(f => f.name === name))
+    .filter(Boolean);
+
+  const section = document.getElementById('quickAccessSection');
+  const grid = document.getElementById('quickAccess');
+
+  if (top.length === 0) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+
+  grid.innerHTML = top.map(f => `
+    <button class="quick-item" data-name="${escapeAttr(f.name)}" title="${escapeAttr(f.name)} (${f.kcal} kcal)">
+      <span class="quick-name">${escapeHtml(f.name)}</span>
+      <span class="quick-kcal">${f.kcal} kcal</span>
+    </button>
+  `).join('');
+
+  grid.querySelectorAll('.quick-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!currentMeal) {
+        alert('Bitte zuerst eine Mahlzeit oben auswählen.');
+        document.querySelector('.meal-btn').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      const food = allFoods().find(f => f.name === btn.dataset.name);
+      if (!food) return;
+      addFoodToMeal(food, getLastQty(food.name));
+    });
+  });
+}
+
+// ===== Trend (Wochen-/Monatsverlauf) =====
+let trendRange = 7;
+
+document.querySelectorAll('.range-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    trendRange = Number(btn.dataset.range);
+    document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTrend();
+  });
+});
+
+function lastNDays(n) {
+  const days = [];
+  const today = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  return days;
+}
+
+function renderTrend() {
+  const days = lastNDays(trendRange);
+  const history = loadHistory();
+  const stepsMap = loadSteps();
+  const cfg = loadConfig();
+  const need = calcDailyNeed(cfg) || 0;
+
+  const data = days.map(date => {
+    const items = history.filter(i => i.date === date);
+    const kcal = items.reduce((s, i) => s + i.kcal, 0);
+    const steps = Number(stepsMap[date] || 0);
+    const burned = Math.round(stepsToKcal(steps, cfg.weight));
+    const health = items.length ? avgHealth(items) : null;
+    return { date, kcal, steps, burned, health, items: items.length };
+  });
+
+  const daysWithData = data.filter(d => d.items > 0);
+  const avgKcal = daysWithData.length
+    ? Math.round(daysWithData.reduce((s, d) => s + d.kcal, 0) / daysWithData.length)
+    : 0;
+  const avgHealthAll = daysWithData.length
+    ? daysWithData.reduce((s, d) => s + (d.health || 0), 0) / daysWithData.length
+    : 0;
+  const avgSteps = daysWithData.length
+    ? Math.round(daysWithData.reduce((s, d) => s + d.steps, 0) / daysWithData.length)
+    : 0;
+
+  const stats = document.getElementById('trendStats');
+  if (daysWithData.length === 0) {
+    stats.innerHTML = '<p class="hint" style="text-align:center">Noch keine Daten in diesem Zeitraum.</p>';
+    document.getElementById('trendChart').innerHTML = '';
+    return;
+  }
+
+  stats.innerHTML = `
+    <div class="trend-stat">
+      <div class="bl-label">Ø Kalorien</div>
+      <div class="bl-value">${avgKcal}</div>
+    </div>
+    <div class="trend-stat">
+      <div class="bl-label">Ø Schritte</div>
+      <div class="bl-value">${avgSteps.toLocaleString('de-DE')}</div>
+    </div>
+    <div class="trend-stat">
+      <div class="bl-label">Ø Gesundheit</div>
+      <div class="bl-value">${healthBadge(avgHealthAll)}</div>
+    </div>
+  `;
+
+  document.getElementById('trendChart').innerHTML = barChart(data, need, trendRange);
+}
+
+function barChart(data, need, range) {
+  const maxKcal = Math.max(need * 1.2, ...data.map(d => d.kcal), 100);
+  const w = 320;
+  const h = 140;
+  const padding = { top: 10, right: 6, bottom: 22, left: 6 };
+  const chartW = w - padding.left - padding.right;
+  const chartH = h - padding.top - padding.bottom;
+  const barW = chartW / data.length;
+  const barGap = Math.max(1, barW * 0.15);
+
+  let bars = '';
+  let labels = '';
+
+  data.forEach((d, idx) => {
+    const x = padding.left + idx * barW + barGap / 2;
+    const bw = barW - barGap;
+    const bh = (d.kcal / maxKcal) * chartH;
+    const y = padding.top + chartH - bh;
+
+    let color = '#c8c8c0';
+    if (d.items > 0) {
+      if (need && d.kcal > need * 1.15) color = '#b00020';
+      else if (need && d.kcal > need * 1.05) color = '#d97706';
+      else if (need && d.kcal < need * 0.7) color = '#3b82f6';
+      else color = '#1f7a3a';
+    }
+
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, bh).toFixed(1)}" fill="${color}" rx="2"><title>${d.date}: ${d.kcal} kcal</title></rect>`;
+
+    // X-axis label: weekday for 7d, day-num for 30d
+    const dt = new Date(d.date);
+    let label = '';
+    if (range <= 7) {
+      label = ['So','Mo','Di','Mi','Do','Fr','Sa'][dt.getDay()];
+    } else if (idx % 5 === 0 || idx === data.length - 1) {
+      label = String(dt.getDate());
+    }
+    if (label) {
+      labels += `<text x="${(x + bw / 2).toFixed(1)}" y="${h - 6}" text-anchor="middle" font-size="10" fill="var(--muted)">${label}</text>`;
+    }
+  });
+
+  // Need line
+  let needLine = '';
+  if (need > 0) {
+    const ny = padding.top + chartH - (need / maxKcal) * chartH;
+    needLine = `<line x1="${padding.left}" y1="${ny.toFixed(1)}" x2="${w - padding.right}" y2="${ny.toFixed(1)}" stroke="var(--muted)" stroke-dasharray="3,3" stroke-width="1"/>
+                <text x="${w - padding.right - 2}" y="${(ny - 3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--muted)">Bedarf ${Math.round(need)}</text>`;
+  }
+
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" preserveAspectRatio="xMidYMid meet">${needLine}${bars}${labels}</svg>`;
 }
 
 // ===== Init =====
 stepsInput.value = getTodaySteps() || '';
+// Pre-select meal by time-of-day
+selectMeal(suggestMealForNow());
 renderAll();
 
-// ===== Service Worker =====
+// ===== Service Worker + Update Banner =====
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('sw.js');
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner(nw);
+          }
+        });
+      });
+    } catch {}
   });
+
+  // Reload when new SW takes control
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+}
+
+function showUpdateBanner(waitingSw) {
+  const banner = document.getElementById('updateBanner');
+  banner.hidden = false;
+  document.getElementById('updateBtn').addEventListener('click', () => {
+    waitingSw.postMessage({ type: 'SKIP_WAITING' });
+  }, { once: true });
 }

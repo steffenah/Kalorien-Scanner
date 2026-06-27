@@ -1,4 +1,4 @@
-const CACHE = 'kalorien-v4';
+const CACHE = 'kalorien-v5';
 const SHELL = [
   './',
   './index.html',
@@ -12,7 +12,13 @@ const SHELL = [
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {}));
-  self.skipWaiting();
+  // Don't auto-skipWaiting — let the client decide via message
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (e) => {
@@ -26,9 +32,7 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // Never cache API calls
   if (url.hostname.includes('anthropic.com')) return;
-  // Only handle same-origin GETs
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
 
   e.respondWith(

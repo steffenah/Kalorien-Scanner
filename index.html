@@ -58,6 +58,12 @@
       </p>
     </section>
 
+    <section id="quickAccessSection" class="card" hidden>
+      <h2>⚡ Schnellzugriff</h2>
+      <p class="hint small">Tippe ein häufiges Lebensmittel, um es zur gewählten Mahlzeit hinzuzufügen.</p>
+      <div id="quickAccess" class="quick-grid"></div>
+    </section>
+
     <section class="card">
       <h2>Neue Mahlzeit</h2>
       <div class="meal-type-row">
@@ -122,7 +128,24 @@
       <div id="mealsGrouped"></div>
       <button id="clearTodayBtn" class="btn small ghost">Heute zurücksetzen</button>
     </section>
+
+    <section id="trendSection" class="card">
+      <div class="trend-header">
+        <h2>📈 Verlauf</h2>
+        <div class="trend-toggle">
+          <button class="range-btn active" data-range="7">7 Tage</button>
+          <button class="range-btn" data-range="30">30 Tage</button>
+        </div>
+      </div>
+      <div id="trendStats" class="trend-stats"></div>
+      <div id="trendChart" class="trend-chart"></div>
+    </section>
   </main>
+
+  <div id="updateBanner" class="update-banner" hidden>
+    🔄 Neue Version verfügbar
+    <button id="updateBtn" class="btn small primary">Neu laden</button>
+  </div>
 
   <dialog id="settingsDialog">
     <form method="dialog">
