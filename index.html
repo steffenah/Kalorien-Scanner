@@ -75,12 +75,18 @@
 
         <div class="entry-tabs">
           <button class="entry-tab active" data-tab="search">🔍 Suchen</button>
+          <button class="entry-tab" data-tab="describe">✍️ Beschreiben</button>
           <button class="entry-tab" data-tab="photo">📷 Foto</button>
         </div>
 
         <div id="searchTab" class="entry-panel">
           <input type="text" id="foodSearch" placeholder="z. B. Toast, Apfel, Salami …" autocomplete="off" />
           <div id="searchResults" class="search-results"></div>
+        </div>
+
+        <div id="describeTab" class="entry-panel" hidden>
+          <textarea id="describeText" placeholder="z. B. 1,5 Brötchen mit 2 Scheiben Salami und einer Scheibe Käse, dazu ein Glas Orangensaft"></textarea>
+          <button id="describeBtn" class="btn primary full">🤖 Kalorien per KI berechnen</button>
         </div>
 
         <div id="photoTab" class="entry-panel" hidden>

@@ -117,6 +117,10 @@ function resetEntryUi() {
   document.getElementById('previewWrap').hidden = true;
   document.getElementById('preview').src = '';
   document.getElementById('photoHint').value = '';
+  document.getElementById('describeText').value = '';
+  const describeBtn = document.getElementById('describeBtn');
+  describeBtn.disabled = false;
+  describeBtn.textContent = '🤖 Kalorien per KI berechnen';
   document.getElementById('resultSection').hidden = true;
   document.getElementById('result').innerHTML = '';
   currentImage = null;
@@ -129,10 +133,132 @@ document.querySelectorAll('.entry-tab').forEach(tab => {
     tab.classList.add('active');
     const which = tab.dataset.tab;
     document.getElementById('searchTab').hidden = (which !== 'search');
+    document.getElementById('describeTab').hidden = (which !== 'describe');
     document.getElementById('photoTab').hidden = (which !== 'photo');
     document.getElementById('resultSection').hidden = true;
   });
 });
+
+// ===== Describe (free text → KI calorie estimate) =====
+document.getElementById('describeBtn').addEventListener('click', async () => {
+  const apiKey = getApiKey();
+  if (!apiKey) { alert('Bitte zuerst API-Key in Einstellungen eintragen.'); openSettings(); return; }
+  if (!currentMeal) { alert('Bitte zuerst Mahlzeit auswählen.'); return; }
+  const text = document.getElementById('describeText').value.trim();
+  if (!text) return;
+
+  const btn = document.getElementById('describeBtn');
+  const resultSection = document.getElementById('resultSection');
+  const loading = document.getElementById('loading');
+  const result = document.getElementById('result');
+
+  btn.disabled = true;
+  btn.textContent = '🤖 Berechne …';
+  resultSection.hidden = false;
+  result.innerHTML = '';
+  loading.hidden = false;
+
+  try {
+    const data = await describeMealAi(text, apiKey, getModel());
+    renderDescribeResult(data, text);
+  } catch (err) {
+    result.innerHTML = `<div class="error">Fehler: ${escapeHtml(err.message)}</div>`;
+    btn.disabled = false;
+    btn.textContent = '🤖 Kalorien per KI berechnen';
+  } finally {
+    loading.hidden = true;
+  }
+});
+
+async function describeMealAi(text, apiKey, model) {
+  const systemPrompt = `Du bist Ernährungsexperte. Der Nutzer beschreibt eine Mahlzeit in Alltagssprache (z. B. "1,5 Brötchen mit 2 Scheiben Salami und einer Scheibe Käse").
+Schätze realistische Kalorien und Makros für die GESAMTE Mahlzeit.
+Antworte AUSSCHLIESSLICH mit gültigem JSON in genau diesem Schema:
+{
+  "name": "kurze Zusammenfassung der Mahlzeit",
+  "portion": "Mengenbeschreibung",
+  "kcal": 450,
+  "protein_g": 25,
+  "carbs_g": 50,
+  "fat_g": 15,
+  "health": 5,
+  "items": [
+    {"name": "1,5 Brötchen", "kcal": 270},
+    {"name": "2 Scheiben Salami", "kcal": 60},
+    {"name": "1 Scheibe Käse", "kcal": 105}
+  ],
+  "note": "kurze Bemerkung zu Annahmen"
+}
+health: 1 (sehr ungesund) – 10 (sehr gesund), kcal-gewichteter Durchschnitt aller Bestandteile.
+items: Liste aller erkannten Bestandteile mit Einzel-kcal (damit der Nutzer die Schätzung nachvollziehen kann).
+Wenn unklar, nimm typische deutsche Standardmengen an. Kein Markdown, kein erklärender Text außerhalb des JSON.`;
+
+  const body = {
+    model, max_tokens: 1024, system: systemPrompt,
+    messages: [{ role: 'user', content: text }],
+  };
+
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json', 'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    try { throw new Error(JSON.parse(t).error?.message || r.statusText); }
+    catch { throw new Error(r.statusText); }
+  }
+  const data = await r.json();
+  const blockText = data.content?.find(b => b.type === 'text')?.text || '';
+  const clean = blockText.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
+  return JSON.parse(clean);
+}
+
+function renderDescribeResult(data, originalText) {
+  const result = document.getElementById('result');
+  const itemsHtml = Array.isArray(data.items) && data.items.length
+    ? `<ul class="breakdown">${data.items.map(i =>
+        `<li><span>${escapeHtml(i.name)}</span><span>${Math.round(i.kcal || 0)} kcal</span></li>`
+      ).join('')}</ul>`
+    : '';
+
+  result.innerHTML = `
+    <div class="result-card">
+      <div class="result-name">${escapeHtml(data.name || 'Mahlzeit')}</div>
+      <div class="result-portion">${escapeHtml(data.portion || originalText)}</div>
+      <div class="kcal-big">${Math.round(data.kcal || 0)} kcal</div>
+      ${itemsHtml}
+      <div class="macros">
+        <div class="macro"><div class="macro-label">Eiweiß</div><div class="macro-value">${Math.round(data.protein_g || 0)} g</div></div>
+        <div class="macro"><div class="macro-label">Kohlenh.</div><div class="macro-value">${Math.round(data.carbs_g || 0)} g</div></div>
+        <div class="macro"><div class="macro-label">Fett</div><div class="macro-value">${Math.round(data.fat_g || 0)} g</div></div>
+      </div>
+      <div class="health-row">Gesundheit: ${healthBadge(data.health || 5)}</div>
+      ${data.note ? `<div class="confidence">${escapeHtml(data.note)}</div>` : ''}
+      <button class="btn primary full" id="saveDescribeBtn">✓ Zu „${escapeHtml(currentMeal)}“ hinzufügen</button>
+    </div>
+  `;
+  document.getElementById('saveDescribeBtn').addEventListener('click', (ev) => {
+    addToHistory({
+      name: data.name || originalText.slice(0, 60),
+      portion: data.portion || '',
+      kcal: Math.round(data.kcal || 0),
+      protein_g: Number(data.protein_g) || 0,
+      carbs_g: Number(data.carbs_g) || 0,
+      fat_g: Number(data.fat_g) || 0,
+      health: Number(data.health) || 5,
+    }, currentMeal);
+    ev.target.textContent = '✓ Hinzugefügt';
+    ev.target.disabled = true;
+    const describeBtn = document.getElementById('describeBtn');
+    describeBtn.disabled = false;
+    describeBtn.textContent = '🤖 Kalorien per KI berechnen';
+  });
+}
 
 // ===== Food Search =====
 const foodSearch = document.getElementById('foodSearch');

@@ -1,4 +1,4 @@
-const CACHE = 'kalorien-v3';
+const CACHE = 'kalorien-v4';
 const SHELL = [
   './',
   './index.html',
