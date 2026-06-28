@@ -1,4 +1,7 @@
 // ===== Storage Keys =====
+const APP_VERSION = 'v0.7';
+const APP_BUILD = '2026-06-28';
+
 const STORE_KEY = 'kalorien-config';
 const HISTORY_KEY = 'kalorien-history';
 const STEPS_KEY = 'kalorien-steps';
@@ -1407,6 +1410,14 @@ function renderBarcodeProduct(p, barcode) {
     ev.target.disabled = true;
   });
 }
+
+// ===== Version Tag =====
+const versionTag = document.getElementById('versionTag');
+versionTag.textContent = APP_VERSION;
+versionTag.title = `Version ${APP_VERSION} · Build ${APP_BUILD}`;
+versionTag.addEventListener('click', () => {
+  flashAdded(`${APP_VERSION} · Build ${APP_BUILD}`);
+});
 
 // ===== Init =====
 selectedDate = todayKey();

@@ -660,6 +660,27 @@ dialog input, dialog select {
   height: auto;
 }
 
+/* ===== Version Tag ===== */
+.version-tag {
+  position: fixed;
+  bottom: 6px;
+  left: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.65rem;
+  color: var(--muted);
+  opacity: 0.55;
+  background: var(--card);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  z-index: 40;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  padding-bottom: max(2px, env(safe-area-inset-bottom));
+}
+.version-tag:active { opacity: 1; }
+
 /* ===== Update Banner ===== */
 .update-banner {
   position: fixed;
