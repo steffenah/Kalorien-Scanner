@@ -389,16 +389,31 @@ textarea {
 }
 .meal-items li {
   display: flex; align-items: center;
-  padding: 6px 0;
+  padding: 2px 0;
   border-bottom: 1px solid var(--border);
   font-size: 0.9rem;
 }
 .meal-items li:last-child { border-bottom: none; }
+.hist-edit {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  padding: 6px 2px;
+  cursor: pointer;
+  border-radius: 6px;
+  -webkit-tap-highlight-color: transparent;
+}
+.hist-edit:active { background: var(--bg); }
 .hist-name { flex: 1; }
 .hist-kcal { font-weight: 600; margin: 0 8px; }
 .hist-delete {
   background: none; border: none; color: var(--muted);
-  cursor: pointer; font-size: 1.2rem; padding: 2px 8px;
+  cursor: pointer; font-size: 1.2rem; padding: 6px 8px;
 }
 
 .meal-footer {
@@ -462,11 +477,109 @@ dialog input, dialog select {
   font: inherit;
 }
 .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.row-3 label { margin-bottom: 0; font-size: 0.85rem; }
+
+/* ===== Barcode result ===== */
+.product-img {
+  max-width: 80px;
+  max-height: 80px;
+  border-radius: 6px;
+  float: right;
+  margin-left: 8px;
+  background: var(--bg);
+}
+.bc-nutri-100 {
+  margin: 10px 0;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-size: 0.88rem;
+}
+.bc-qty-label {
+  display: block;
+  margin: 12px 0 8px;
+  font-weight: 500;
+}
+.bc-qty-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.bc-qty-row input {
+  width: 100px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  text-align: right;
+}
+.bc-live {
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 8px;
+  margin: 8px 0;
+}
 .dialog-actions {
   display: flex; gap: 8px; justify-content: flex-end;
   margin-top: 16px;
 }
 .dialog-actions .btn { flex: none; }
+
+/* ===== Date Navigation ===== */
+.date-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 6px;
+  background: var(--bg);
+  border-radius: 8px;
+}
+.date-arrow {
+  background: var(--input-bg, white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 1rem;
+  cursor: pointer;
+  color: var(--text);
+}
+.date-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
+.date-display {
+  flex: 1;
+  text-align: center;
+  line-height: 1.1;
+}
+.date-day { font-weight: 600; }
+.date-full { font-size: 0.8rem; color: var(--muted); }
+.date-picker-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.balance-card.past-day {
+  border: 2px solid var(--warn);
+}
+.balance-card.past-day .date-day {
+  color: var(--warn);
+}
+.back-today {
+  display: block;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 8px;
+  background: var(--warn);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
 
 /* ===== Quick Access ===== */
 .quick-grid {

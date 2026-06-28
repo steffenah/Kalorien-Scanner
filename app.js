@@ -32,6 +32,7 @@ const MACRO_COLORS = {
 
 let currentMeal = null;
 let currentImage = null;
+let selectedDate = null; // set in init
 
 // ===== Config =====
 function loadConfig() {
@@ -163,6 +164,10 @@ function resetEntryUi() {
   describeBtn.textContent = '🤖 Kalorien per KI berechnen';
   document.getElementById('resultSection').hidden = true;
   document.getElementById('result').innerHTML = '';
+  const bcStatus = document.getElementById('barcodeStatus');
+  const bcResult = document.getElementById('barcodeResult');
+  if (bcStatus) { bcStatus.hidden = true; bcStatus.textContent = ''; }
+  if (bcResult) bcResult.innerHTML = '';
   currentImage = null;
 }
 
@@ -174,6 +179,7 @@ document.querySelectorAll('.entry-tab').forEach(tab => {
     const which = tab.dataset.tab;
     document.getElementById('searchTab').hidden = (which !== 'search');
     document.getElementById('describeTab').hidden = (which !== 'describe');
+    document.getElementById('barcodeTab').hidden = (which !== 'barcode');
     document.getElementById('photoTab').hidden = (which !== 'photo');
     document.getElementById('resultSection').hidden = true;
   });
@@ -616,7 +622,7 @@ function addToHistory(data, mealType) {
   const items = loadHistory();
   items.push({
     id: Date.now() + Math.random(),
-    date: todayKey(),
+    date: selectedDate,
     meal: mealType,
     name: data.name,
     portion: data.portion || '',
@@ -631,7 +637,26 @@ function addToHistory(data, mealType) {
 }
 
 function todayItems() {
-  return loadHistory().filter(i => i.date === todayKey());
+  return loadHistory().filter(i => i.date === selectedDate);
+}
+
+function dayKey(d) { return d.toISOString().slice(0, 10); }
+function addDays(date, n) {
+  const d = new Date(date + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return dayKey(d);
+}
+function fmtDateLabel(dateStr) {
+  const today = todayKey();
+  const yesterday = addDays(today, -1);
+  const d = new Date(dateStr + 'T00:00:00');
+  const wdNames = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+  const dayName = wdNames[d.getDay()];
+  const dateStr2 = `${dayName}, ${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+  let label = dayName;
+  if (dateStr === today) label = 'Heute';
+  else if (dateStr === yesterday) label = 'Gestern';
+  return { short: label, full: dateStr2 };
 }
 
 function renderHistory() {
@@ -670,8 +695,10 @@ function renderHistory() {
         <ul class="meal-items">
           ${group.map(i => `
             <li>
-              <span class="hist-name">${escapeHtml(i.name)}</span>
-              <span class="hist-kcal">${i.kcal} kcal</span>
+              <button class="hist-edit" data-id="${i.id}" title="Bearbeiten">
+                <span class="hist-name">${escapeHtml(i.name)}</span>
+                <span class="hist-kcal">${i.kcal} kcal</span>
+              </button>
               <button class="hist-delete" data-id="${i.id}" title="Entfernen">×</button>
             </li>
           `).join('')}
@@ -703,11 +730,18 @@ function renderHistory() {
       renderAll();
     });
   });
+
+  container.querySelectorAll('.hist-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openEditDialog(btn.dataset.id);
+    });
+  });
 }
 
 document.getElementById('clearTodayBtn').addEventListener('click', () => {
-  if (!confirm('Alle Einträge von heute löschen?')) return;
-  saveHistory(loadHistory().filter(i => i.date !== todayKey()));
+  const label = fmtDateLabel(selectedDate).short.toLowerCase();
+  if (!confirm(`Alle Einträge von "${label}" löschen?`)) return;
+  saveHistory(loadHistory().filter(i => i.date !== selectedDate));
   renderAll();
 });
 
@@ -719,11 +753,11 @@ function loadSteps() {
   catch { return {}; }
 }
 function saveStepsMap(map) { localStorage.setItem(STEPS_KEY, JSON.stringify(map)); }
-function getTodaySteps() { return Number(loadSteps()[todayKey()] || 0); }
+function getTodaySteps() { return Number(loadSteps()[selectedDate] || 0); }
 
 stepsInput.addEventListener('input', () => {
   const map = loadSteps();
-  map[todayKey()] = Number(stepsInput.value) || 0;
+  map[selectedDate] = Number(stepsInput.value) || 0;
   saveStepsMap(map);
   renderBalance();
 });
@@ -1070,7 +1104,313 @@ function barChart(data, need, range) {
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" preserveAspectRatio="xMidYMid meet">${needLine}${bars}${labels}</svg>`;
 }
 
+// ===== Date Navigation =====
+function setSelectedDate(newDate) {
+  selectedDate = newDate;
+  stepsInput.value = Number(loadSteps()[selectedDate] || 0) || '';
+  updateDateUi();
+  renderAll();
+}
+
+function updateDateUi() {
+  const lbl = fmtDateLabel(selectedDate);
+  document.getElementById('dateDay').textContent = lbl.short;
+  document.getElementById('dateFull').textContent = lbl.full;
+  const isToday = selectedDate === todayKey();
+  document.getElementById('dateNext').disabled = isToday;
+  document.getElementById('backToToday').hidden = isToday;
+  document.getElementById('balanceSection').classList.toggle('past-day', !isToday);
+  document.getElementById('historyTitle').textContent = isToday
+    ? 'Heute gegessen'
+    : `Gegessen am ${lbl.full}`;
+  document.getElementById('stepsLabel').textContent = isToday
+    ? 'Schritte heute:' : 'Schritte:';
+  document.getElementById('datePicker').value = selectedDate;
+}
+
+document.getElementById('datePrev').addEventListener('click', () => {
+  setSelectedDate(addDays(selectedDate, -1));
+});
+document.getElementById('dateNext').addEventListener('click', () => {
+  if (selectedDate === todayKey()) return;
+  setSelectedDate(addDays(selectedDate, 1));
+});
+document.getElementById('datePickerBtn').addEventListener('click', () => {
+  document.getElementById('datePicker').showPicker?.() || document.getElementById('datePicker').click();
+});
+document.getElementById('datePicker').addEventListener('change', (e) => {
+  if (e.target.value) setSelectedDate(e.target.value);
+});
+document.getElementById('backToToday').addEventListener('click', () => {
+  setSelectedDate(todayKey());
+});
+
+// ===== Edit Dialog =====
+const editDialog = document.getElementById('editDialog');
+let editingId = null;
+
+function openEditDialog(id) {
+  const item = loadHistory().find(i => String(i.id) === id);
+  if (!item) return;
+  editingId = id;
+  document.getElementById('editName').value = item.name || '';
+  document.getElementById('editMeal').value = item.meal || 'Frühstück';
+  document.getElementById('editDate').value = item.date || todayKey();
+  document.getElementById('editKcal').value = item.kcal || 0;
+  document.getElementById('editP').value = item.protein_g || 0;
+  document.getElementById('editC').value = item.carbs_g || 0;
+  document.getElementById('editF').value = item.fat_g || 0;
+  document.getElementById('editH').value = item.health || 5;
+  editDialog.showModal();
+}
+
+document.getElementById('editCancel').addEventListener('click', () => editDialog.close());
+
+document.getElementById('editSave').addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!editingId) return;
+  const items = loadHistory();
+  const idx = items.findIndex(i => String(i.id) === editingId);
+  if (idx === -1) { editDialog.close(); return; }
+  items[idx] = {
+    ...items[idx],
+    name: document.getElementById('editName').value.trim() || items[idx].name,
+    meal: document.getElementById('editMeal').value,
+    date: document.getElementById('editDate').value || items[idx].date,
+    kcal: Math.round(Number(document.getElementById('editKcal').value) || 0),
+    protein_g: Number(document.getElementById('editP').value) || 0,
+    carbs_g: Number(document.getElementById('editC').value) || 0,
+    fat_g: Number(document.getElementById('editF').value) || 0,
+    health: Math.max(1, Math.min(10, Number(document.getElementById('editH').value) || 5)),
+  };
+  saveHistory(items);
+  editDialog.close();
+  editingId = null;
+  renderAll();
+});
+
+document.getElementById('editDelete').addEventListener('click', () => {
+  if (!editingId) return;
+  if (!confirm('Diesen Eintrag löschen?')) return;
+  saveHistory(loadHistory().filter(i => String(i.id) !== editingId));
+  editDialog.close();
+  editingId = null;
+  renderAll();
+});
+
+// ===== Barcode Scan =====
+const barcodeInput = document.getElementById('barcodeInput');
+const barcodeStatus = document.getElementById('barcodeStatus');
+const barcodeResult = document.getElementById('barcodeResult');
+
+barcodeInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!currentMeal) { alert('Bitte zuerst Mahlzeit auswählen.'); return; }
+
+  barcodeResult.innerHTML = '';
+  barcodeStatus.hidden = false;
+  barcodeStatus.textContent = '🔍 Barcode wird erkannt …';
+
+  try {
+    const barcode = await detectBarcode(file);
+    if (!barcode) throw new Error('Kein Barcode auf dem Foto erkennbar. Versuch ein schärferes Bild näher am Code.');
+    barcodeStatus.textContent = `📊 Barcode: ${barcode} — suche in Open Food Facts …`;
+
+    const product = await lookupOpenFoodFacts(barcode);
+    if (!product) {
+      // Try AI fallback to get nutrition for known product name or estimate
+      throw new Error(`Produkt ${barcode} nicht in Open Food Facts gefunden. Tipp: nimm den ✍️ Beschreiben-Tab.`);
+    }
+
+    barcodeStatus.hidden = true;
+    renderBarcodeProduct(product, barcode);
+  } catch (err) {
+    barcodeStatus.textContent = `⚠️ ${err.message}`;
+  } finally {
+    barcodeInput.value = '';
+  }
+});
+
+async function detectBarcode(file) {
+  // Try native BarcodeDetector first (Chrome Android, Edge)
+  if ('BarcodeDetector' in window) {
+    try {
+      const supported = await BarcodeDetector.getSupportedFormats();
+      const formats = ['ean_13','ean_8','upc_a','upc_e','code_128','code_39'].filter(f => supported.includes(f));
+      const detector = new BarcodeDetector({ formats });
+      const bitmap = await createImageBitmap(file);
+      const codes = await detector.detect(bitmap);
+      if (codes.length > 0) return codes[0].rawValue;
+    } catch {}
+  }
+  // Fallback: ask Claude to OCR the digits
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('API-Key fehlt — entweder Browser unterstützt Barcode nicht nativ, oder Key fehlt für OCR-Fallback.');
+  const dataUrl = await fileToResizedDataUrl(file, 1280);
+  const image = { base64: dataUrl.split(',')[1], mediaType: 'image/jpeg' };
+  return await ocrBarcodeWithAi(image, apiKey, getModel());
+}
+
+function fileToResizedDataUrl(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => resolve(await resizeImage(e.target.result, maxDim));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function ocrBarcodeWithAi(image, apiKey, model) {
+  const body = {
+    model, max_tokens: 60,
+    system: 'Lies die Barcode-Ziffernfolge unter dem Strichcode auf diesem Bild. Antworte NUR mit der reinen Ziffernfolge (8-13 Stellen), kein Text drumherum. Wenn nicht lesbar: antworte mit "NONE".',
+    messages: [{
+      role: 'user',
+      content: [{ type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.base64 } }],
+    }],
+  };
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json', 'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) return null;
+  const data = await r.json();
+  const text = (data.content?.find(b => b.type === 'text')?.text || '').trim();
+  const digits = text.match(/\d{8,14}/);
+  return digits ? digits[0] : null;
+}
+
+async function lookupOpenFoodFacts(barcode) {
+  try {
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json?fields=product_name,product_name_de,brands,nutriments,serving_size,serving_quantity,nutriscore_grade,image_small_url`);
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (data.status !== 1 || !data.product) return null;
+    const p = data.product;
+    const n = p.nutriments || {};
+    const kcal100 = Number(n['energy-kcal_100g']) || (n['energy_100g'] ? n['energy_100g'] / 4.184 : 0);
+    return {
+      barcode,
+      name: p.product_name_de || p.product_name || `Produkt ${barcode}`,
+      brand: p.brands || '',
+      image: p.image_small_url || '',
+      kcal_per_100g: Math.round(kcal100),
+      protein_per_100g: Number(n.proteins_100g) || 0,
+      carbs_per_100g: Number(n.carbohydrates_100g) || 0,
+      fat_per_100g: Number(n.fat_100g) || 0,
+      sugar_per_100g: Number(n.sugars_100g) || 0,
+      salt_per_100g: Number(n.salt_100g) || 0,
+      serving_size: p.serving_size || '',
+      serving_g: Number(p.serving_quantity) || 100,
+      nutriscore: p.nutriscore_grade || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function nutriscoreToHealth(grade) {
+  return { a: 10, b: 8, c: 6, d: 4, e: 2 }[String(grade).toLowerCase()] || 5;
+}
+
+function renderBarcodeProduct(p, barcode) {
+  const health = nutriscoreToHealth(p.nutriscore);
+  const defaultG = p.serving_g || 100;
+
+  barcodeResult.innerHTML = `
+    <div class="result-card">
+      ${p.image ? `<img src="${escapeAttr(p.image)}" class="product-img" alt="" />` : ''}
+      <div class="result-name">${escapeHtml(p.name)}</div>
+      <div class="result-portion">
+        ${p.brand ? escapeHtml(p.brand) + ' · ' : ''}EAN ${escapeHtml(barcode)}
+        ${p.nutriscore ? ` · Nutri-Score <b>${p.nutriscore.toUpperCase()}</b>` : ''}
+      </div>
+
+      <div class="bc-nutri-100">
+        Pro 100 g: <b>${p.kcal_per_100g}</b> kcal ·
+        E ${p.protein_per_100g}g · K ${p.carbs_per_100g}g · F ${p.fat_per_100g}g
+      </div>
+
+      <label class="bc-qty-label">
+        Verzehrte Menge:
+        <div class="bc-qty-row">
+          <input type="number" id="bcGrams" min="1" step="1" value="${defaultG}" inputmode="numeric" />
+          <span>g</span>
+        </div>
+        ${p.serving_size ? `<small class="hint small">Eine Portion lt. Hersteller: ${escapeHtml(p.serving_size)}</small>` : ''}
+      </label>
+
+      <div id="bcLive" class="bc-live"></div>
+      <div class="health-row">Gesundheit: ${healthBadge(health)}</div>
+
+      <button class="btn primary full" id="bcAddBtn">✓ Zu „${escapeHtml(currentMeal)}" hinzufügen</button>
+    </div>
+  `;
+
+  const gramsInput = document.getElementById('bcGrams');
+  function updateLive() {
+    const g = Number(gramsInput.value) || 0;
+    const fac = g / 100;
+    document.getElementById('bcLive').innerHTML = `
+      <div class="kcal-big">${Math.round(p.kcal_per_100g * fac)} kcal</div>
+      <div class="macros">
+        <div class="macro"><div class="macro-label">Eiweiß</div><div class="macro-value">${round1(p.protein_per_100g * fac)} g</div></div>
+        <div class="macro"><div class="macro-label">Kohlenh.</div><div class="macro-value">${round1(p.carbs_per_100g * fac)} g</div></div>
+        <div class="macro"><div class="macro-label">Fett</div><div class="macro-value">${round1(p.fat_per_100g * fac)} g</div></div>
+      </div>
+    `;
+  }
+  gramsInput.addEventListener('input', updateLive);
+  updateLive();
+
+  document.getElementById('bcAddBtn').addEventListener('click', (ev) => {
+    const g = Number(gramsInput.value) || defaultG;
+    const fac = g / 100;
+    const entry = {
+      name: `${p.name}${g !== 100 ? ` (${g}g)` : ''}`,
+      portion: `${g} g`,
+      kcal: Math.round(p.kcal_per_100g * fac),
+      protein_g: round1(p.protein_per_100g * fac),
+      carbs_g: round1(p.carbs_per_100g * fac),
+      fat_g: round1(p.fat_per_100g * fac),
+      health,
+    };
+    addToHistory(entry, currentMeal);
+
+    // Cache as custom food for future use (per portion = serving_g)
+    const custom = loadCustomFoods();
+    if (!custom.find(f => normalize(f.name) === normalize(p.name))) {
+      const sg = p.serving_g || 100;
+      const sfac = sg / 100;
+      custom.push({
+        name: p.name,
+        einheit: `Portion (${sg}g)`,
+        kcal: Math.round(p.kcal_per_100g * sfac),
+        p: round1(p.protein_per_100g * sfac),
+        c: round1(p.carbs_per_100g * sfac),
+        f: round1(p.fat_per_100g * sfac),
+        health,
+        cat: 'Barcode',
+        barcode,
+      });
+      saveCustomFoods(custom);
+    }
+    bumpFreq(p.name);
+
+    ev.target.textContent = '✓ Hinzugefügt';
+    ev.target.disabled = true;
+  });
+}
+
 // ===== Init =====
+selectedDate = todayKey();
+updateDateUi();
 stepsInput.value = getTodaySteps() || '';
 // Pre-select meal by time-of-day
 selectMeal(suggestMealForNow());

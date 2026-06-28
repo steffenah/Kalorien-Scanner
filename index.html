@@ -18,6 +18,17 @@
 
   <main>
     <section id="balanceSection" class="card balance-card">
+      <div class="date-nav">
+        <button id="datePrev" class="date-arrow" title="Tag zurück">◄</button>
+        <div class="date-display">
+          <div class="date-day" id="dateDay">Heute</div>
+          <div class="date-full" id="dateFull">–</div>
+        </div>
+        <button id="dateNext" class="date-arrow" title="Tag vor">►</button>
+        <input type="date" id="datePicker" class="date-picker-hidden" />
+        <button id="datePickerBtn" class="date-arrow" title="Datum wählen">📅</button>
+      </div>
+      <button id="backToToday" class="back-today" hidden>← zurück zu heute</button>
       <h2>Tagesbilanz</h2>
       <div class="balance-grid">
         <div class="balance-item">
@@ -39,7 +50,7 @@
         <div class="bl-sub" id="bdSaldoHint"></div>
       </div>
       <div class="steps-row">
-        <label for="stepsInput">Schritte heute:</label>
+        <label for="stepsInput"><span id="stepsLabel">Schritte heute:</span></label>
         <input type="number" id="stepsInput" min="0" placeholder="0" inputmode="numeric" />
       </div>
       <div id="dayCharts" class="charts-row" hidden>
@@ -82,6 +93,7 @@
         <div class="entry-tabs">
           <button class="entry-tab active" data-tab="search">🔍 Suchen</button>
           <button class="entry-tab" data-tab="describe">✍️ Beschreiben</button>
+          <button class="entry-tab" data-tab="barcode">📊 Barcode</button>
           <button class="entry-tab" data-tab="photo">📷 Foto</button>
         </div>
 
@@ -93,6 +105,16 @@
         <div id="describeTab" class="entry-panel" hidden>
           <textarea id="describeText" placeholder="z. B. 1,5 Brötchen mit 2 Scheiben Salami und einer Scheibe Käse, dazu ein Glas Orangensaft"></textarea>
           <button id="describeBtn" class="btn primary full">🤖 Kalorien per KI berechnen</button>
+        </div>
+
+        <div id="barcodeTab" class="entry-panel" hidden>
+          <p class="hint small">Foto vom Barcode des Produkts machen — Nährwerte werden online gesucht (Open Food Facts).</p>
+          <label class="btn primary full">
+            📊 Barcode fotografieren
+            <input type="file" accept="image/*" capture="environment" id="barcodeInput" hidden />
+          </label>
+          <div id="barcodeStatus" class="hint small" hidden></div>
+          <div id="barcodeResult"></div>
         </div>
 
         <div id="photoTab" class="entry-panel" hidden>
@@ -124,9 +146,9 @@
     </section>
 
     <section id="historySection" class="card">
-      <h2>Heute gegessen</h2>
+      <h2 id="historyTitle">Heute gegessen</h2>
       <div id="mealsGrouped"></div>
-      <button id="clearTodayBtn" class="btn small ghost">Heute zurücksetzen</button>
+      <button id="clearTodayBtn" class="btn small ghost">Tag zurücksetzen</button>
     </section>
 
     <section id="trendSection" class="card">
@@ -146,6 +168,49 @@
     🔄 Neue Version verfügbar
     <button id="updateBtn" class="btn small primary">Neu laden</button>
   </div>
+
+  <dialog id="editDialog">
+    <form method="dialog">
+      <h2>Eintrag bearbeiten</h2>
+      <label>
+        Name
+        <input type="text" id="editName" />
+      </label>
+      <label>
+        Mahlzeit
+        <select id="editMeal">
+          <option value="Frühstück">Frühstück</option>
+          <option value="Zwischenmahlzeit (vormittag)">Zwischenmahlzeit (vormittag)</option>
+          <option value="Mittagessen">Mittagessen</option>
+          <option value="Zwischenmahlzeit (nachmittag)">Zwischenmahlzeit (nachmittag)</option>
+          <option value="Abendessen">Abendessen</option>
+          <option value="Spät / Nachspeise">Spät / Nachspeise</option>
+        </select>
+      </label>
+      <label>
+        Datum
+        <input type="date" id="editDate" />
+      </label>
+      <label>
+        Kalorien (kcal)
+        <input type="number" id="editKcal" min="0" />
+      </label>
+      <div class="row-3">
+        <label>Eiweiß (g)<input type="number" id="editP" min="0" step="0.1" /></label>
+        <label>KH (g)<input type="number" id="editC" min="0" step="0.1" /></label>
+        <label>Fett (g)<input type="number" id="editF" min="0" step="0.1" /></label>
+      </div>
+      <label>
+        Gesundheit (1–10)
+        <input type="number" id="editH" min="1" max="10" step="1" />
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="editDelete" class="btn small ghost" style="color:var(--bad)">🗑 Löschen</button>
+        <button type="button" id="editCancel" class="btn ghost">Abbrechen</button>
+        <button type="submit" id="editSave" class="btn primary">Speichern</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="settingsDialog">
     <form method="dialog">
