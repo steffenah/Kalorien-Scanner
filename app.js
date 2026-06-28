@@ -1,5 +1,5 @@
 // ===== Storage Keys =====
-const APP_VERSION = 'v0.7';
+const APP_VERSION = 'v0.8';
 const APP_BUILD = '2026-06-28';
 
 const STORE_KEY = 'kalorien-config';
@@ -1414,9 +1414,32 @@ function renderBarcodeProduct(p, barcode) {
 // ===== Version Tag =====
 const versionTag = document.getElementById('versionTag');
 versionTag.textContent = APP_VERSION;
-versionTag.title = `Version ${APP_VERSION} · Build ${APP_BUILD}`;
-versionTag.addEventListener('click', () => {
-  flashAdded(`${APP_VERSION} · Build ${APP_BUILD}`);
+versionTag.title = `Version ${APP_VERSION} · Build ${APP_BUILD} — tap: nach Update suchen`;
+versionTag.addEventListener('click', async () => {
+  versionTag.textContent = '⟳ prüfe…';
+  if ('serviceWorker' in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.update();
+        // Wait briefly to see if a new SW gets discovered
+        await new Promise(r => setTimeout(r, 1500));
+        if (reg.waiting) {
+          flashAdded('Neue Version gefunden — Banner zum Neuladen!');
+          showUpdateBanner(reg.waiting);
+        } else {
+          flashAdded(`${APP_VERSION} ist aktuell · Build ${APP_BUILD}`);
+        }
+      } else {
+        flashAdded(`${APP_VERSION} · Build ${APP_BUILD}`);
+      }
+    } catch {
+      flashAdded(`${APP_VERSION} · Build ${APP_BUILD}`);
+    }
+  } else {
+    flashAdded(`${APP_VERSION} · Build ${APP_BUILD}`);
+  }
+  versionTag.textContent = APP_VERSION;
 });
 
 // ===== Init =====
@@ -1428,10 +1451,15 @@ selectMeal(suggestMealForNow());
 renderAll();
 
 // ===== Service Worker + Update Banner =====
+let _registration = null;
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      const reg = await navigator.serviceWorker.register('sw.js');
+      // updateViaCache: 'none' — Browser holt sw.js IMMER frisch, kein HTTP-Cache
+      const reg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+      _registration = reg;
+
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
         if (!nw) return;
@@ -1441,10 +1469,30 @@ if ('serviceWorker' in navigator) {
           }
         });
       });
+
+      // Beim Start aktiv nach Updates suchen
+      reg.update().catch(() => {});
+
+      // Wenn schon ein Update wartet (z. B. von letztem Besuch), Banner zeigen
+      if (reg.waiting && navigator.serviceWorker.controller) {
+        showUpdateBanner(reg.waiting);
+      }
     } catch {}
   });
 
-  // Reload when new SW takes control
+  // Bei jedem Sichtbarwerden der App (App-Switch / wieder ins Fenster) Update prüfen
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && _registration) {
+      _registration.update().catch(() => {});
+    }
+  });
+
+  // Alle 30 Min im Hintergrund prüfen, solange App offen ist
+  setInterval(() => {
+    if (_registration) _registration.update().catch(() => {});
+  }, 30 * 60 * 1000);
+
+  // Reload wenn neuer SW übernimmt
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (refreshing) return;
